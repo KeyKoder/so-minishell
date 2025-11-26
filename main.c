@@ -15,7 +15,7 @@ int main(void) {
 	int i,j;
 	pid_t childPid; // TOOO: Swap with a dynamic size array for handling multiple commands
 
-	printf("==> ");	
+	printf("==> ");
 	while (fgets(buf, 1024, stdin)) {
 		line = tokenize(buf);
 		if (line == NULL)
@@ -35,10 +35,13 @@ int main(void) {
 		if (line->background) {
 			// TODO: Handle background execution with jobs
 			printf("comando a ejecutarse en background\n");
-		} 
-		for (i=0; i<line->ncommands; i++) {			
+		}
+		for (i=0; i<line->ncommands; i++) {
 			if (line->commands[i].filename == NULL) {
 				// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
+				if (strcmp(line->commands[i].argv[0], "exit") == 0) {
+					exit(0);
+				}
 			} else {
 				// TODO: Fork and exec command
 
