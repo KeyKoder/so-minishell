@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/errno.h>
+#include <sys/stat.h>
 
 #include "parser.h"
 
@@ -29,10 +30,30 @@ int cd(char* dir) {
     return 0;
 }
 
+
+// TODO MEMORIA: Explain string to octal algorithm
+
+int applyUmask(char* mode) {
+	int modeInt = 0;
+	int i;
+	for(i=0; i<strlen(mode); i++){
+		if(mode[i] >= '0' && mode[i] <= '9'){
+			modeInt = modeInt | mode[i] -'0' << ((2-i)*3);
+		}
+		else{
+			printf("Numero fuera del rango 0-9.");
+        	return 1;
+		}
+	}
+	umask(modeInt);
+
+	return 0;
+}
+
 int main(void) {
 	char buf[1024];
 	tline * line;
-	int i,j;
+	int i;
 	pid_t childPid; // TOOO: Swap with a dynamic size array for handling multiple commands
 
 	printf("==> ");
@@ -67,6 +88,13 @@ int main(void) {
 						cd(NULL);
 					} else {
 						cd(line->commands[i].argv[1]);
+					}
+				} else if (strcmp(line->commands[i].argv[0], "umask") == 0) {
+					if (line->commands[i].argc == 2) {
+						applyUmask(line->commands[i].argv[1]);
+					} else {
+						// TODO: Replace this with code to get the value of umask when called with no arguments (argc == 1)
+						printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros");
 					}
 				}
 				continue;
