@@ -4,10 +4,30 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/errno.h>
 
 #include "parser.h"
 
+#define PATH_LEN 1024
+
 // TODO: create job struct
+
+int cd(char* dir) {
+    if(dir == NULL) {
+        dir = getenv("HOME");
+    }
+
+    if(chdir(dir) != 0) {
+        fprintf(stderr, "Error al cambiar. %s\n", strerror(errno));
+        return errno;
+    }
+
+    char cwd[PATH_LEN];
+    getcwd(cwd, PATH_LEN);
+    printf("%s\n", cwd);
+
+    return 0;
+}
 
 int main(void) {
 	char buf[1024];
@@ -41,7 +61,15 @@ int main(void) {
 				// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
 				if (strcmp(line->commands[i].argv[0], "exit") == 0) {
 					exit(0);
+				} else if (strcmp(line->commands[i].argv[0], "cd") == 0) {
+					// cd(line->commands[i].argc == 1 ? NULL : line->commands[i].argv[1]);
+					if (line->commands[i].argc == 1) {
+						cd(NULL);
+					} else {
+						cd(line->commands[i].argv[1]);
+					}
 				}
+				continue;
 			} else {
 				// TODO: Fork and exec command
 
