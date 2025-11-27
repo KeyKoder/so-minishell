@@ -55,6 +55,7 @@ int main(void) {
 	tline * line;
 	int i;
 	pid_t childPid; // TOOO: Swap with a dynamic size array for handling multiple commands
+	int* pipes;
 	FILE* stdin_redirect = NULL;
 	FILE* stdout_redirect = NULL;
 	FILE* stderr_redirect = NULL;
@@ -77,6 +78,9 @@ int main(void) {
 			// TODO: Handle background execution with jobs
 			printf("comando a ejecutarse en background\n");
 		}
+		
+		pipes = (int*)malloc((line->ncommands-1) * sizeof(int)*2);
+
 		for (i=0; i<line->ncommands; i++) {
 			if (line->commands[i].filename == NULL) {
 				// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
@@ -99,6 +103,10 @@ int main(void) {
 				}
 				continue;
 			} else {
+				if(i < line->ncommands-1) {
+					pipe((int*)pipes+i*2);
+				}
+
 				childPid = fork();
 				if (childPid < 0) {
 					// TODO: Handle fork error somehow
@@ -122,10 +130,29 @@ int main(void) {
 						dup(fileno(stderr_redirect));
 						fclose(stderr_redirect);
 					}
+
+					if(i == 0) {
+						close(pipes[0]);
+						dup2(pipes[1], STDOUT_FILENO);
+					} else if(i == line->ncommands-1) {
+						close(pipes[(i-1)*2+1]);
+						dup2(pipes[(i-1)*2], STDIN_FILENO);
+					} else {
+						close(pipes[(i-1)*2+1]);
+						dup2(pipes[(i-1)*2], STDIN_FILENO);
+
+						close(pipes[i*2]);
+						dup2(pipes[i*2+1], STDOUT_FILENO);
+					}
+
 					execvp(line->commands[i].filename, line->commands[i].argv);
 
 					exit(39); // TODO: execvp failed, think of what to return here later
 				} else { // NOT CHILD
+					if(i > 0) {
+						close(pipes[(i-1)*2+1]);
+						close(pipes[(i-1)*2]);
+					}
 					waitpid(childPid, NULL, 0);
 					continue;
 				}
@@ -145,6 +172,7 @@ int main(void) {
 			fclose(stderr_redirect);
 			stderr_redirect = NULL;
 		}
+		free(pipes);
 
 		printf("==> ");
 	}
