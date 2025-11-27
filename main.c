@@ -60,7 +60,7 @@ int main(void) {
 	FILE* stdout_redirect = NULL;
 	FILE* stderr_redirect = NULL;
 
-	printf("==> ");
+	printf("msh> ");
 	while (fgets(buf, 1024, stdin)) {
 		line = tokenize(buf);
 		if (line == NULL)
@@ -174,7 +174,7 @@ int main(void) {
 		}
 		free(pipes);
 
-		printf("==> ");
+		printf("msh> ");
 	}
 
 	return 0;
