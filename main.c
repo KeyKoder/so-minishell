@@ -55,6 +55,9 @@ int main(void) {
 	tline * line;
 	int i;
 	pid_t childPid; // TOOO: Swap with a dynamic size array for handling multiple commands
+	FILE* stdin_redirect = NULL;
+	FILE* stdout_redirect = NULL;
+	FILE* stderr_redirect = NULL;
 
 	printf("==> ");
 	while (fgets(buf, 1024, stdin)) {
@@ -62,16 +65,13 @@ int main(void) {
 		if (line == NULL)
 			continue;
 		if (line->redirect_input != NULL) {
-			// TODO: Handle stdin redirection
-			printf("redirección de entrada: %s\n", line->redirect_input);
+			stdin_redirect = fopen(line->redirect_input, "r");
 		}
 		if (line->redirect_output != NULL) {
-			// TODO: Handle stdout redirection
-			printf("redirección de salida: %s\n", line->redirect_output);
+			stdout_redirect = fopen(line->redirect_output, "w");
 		}
 		if (line->redirect_error != NULL) {
-			// TODO: Handle stderr redirection
-			printf("redirección de error: %s\n", line->redirect_error);
+			stderr_redirect = fopen(line->redirect_error, "w");
 		}
 		if (line->background) {
 			// TODO: Handle background execution with jobs
@@ -94,13 +94,11 @@ int main(void) {
 						applyUmask(line->commands[i].argv[1]);
 					} else {
 						// TODO: Replace this with code to get the value of umask when called with no arguments (argc == 1)
-						printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros");
+						printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros\n");
 					}
 				}
 				continue;
 			} else {
-				// TODO: Fork and exec command
-
 				childPid = fork();
 				if (childPid < 0) {
 					// TODO: Handle fork error somehow
@@ -108,6 +106,22 @@ int main(void) {
 				}
 
 				if (childPid == 0) { // CHILD
+					// TODO: Maybe? remove the i check from the redirections
+					if (i == 0 && line->redirect_input != NULL) {
+						close(STDIN_FILENO);
+						dup(fileno(stdin_redirect));
+						fclose(stdin_redirect);
+					}
+					if (i == line->ncommands-1 && line->redirect_output != NULL) {
+						close(STDOUT_FILENO);
+						dup(fileno(stdout_redirect));
+						fclose(stdout_redirect);
+					}
+					if (i == line->ncommands-1 && line->redirect_error != NULL) {
+						close(STDERR_FILENO);
+						dup(fileno(stderr_redirect));
+						fclose(stderr_redirect);
+					}
 					execvp(line->commands[i].filename, line->commands[i].argv);
 
 					exit(39); // TODO: execvp failed, think of what to return here later
@@ -117,7 +131,23 @@ int main(void) {
 				}
 			}
 		}
+
+		// Cleanup
+		if (stdin_redirect != NULL) {
+			fclose(stdin_redirect);
+			stdin_redirect = NULL;
+		}
+		if (stdout_redirect != NULL) {
+			fclose(stdout_redirect);
+			stdout_redirect = NULL;
+		}
+		if (stderr_redirect != NULL) {
+			fclose(stderr_redirect);
+			stderr_redirect = NULL;
+		}
+
 		printf("==> ");
 	}
+
 	return 0;
 }
