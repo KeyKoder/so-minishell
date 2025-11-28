@@ -54,7 +54,9 @@ int main(void) {
 	char buf[1024];
 	tline * line;
 	int i;
-	pid_t childPid; // TOOO: Swap with a dynamic size array for handling multiple commands
+
+	// TODO: Move these variables into a job struct
+	pid_t childPid;
 	int* pipes;
 	FILE* stdin_redirect = NULL;
 	FILE* stdout_redirect = NULL;
@@ -66,6 +68,7 @@ int main(void) {
 		if (line == NULL)
 			continue;
 		if (line->redirect_input != NULL) {
+			// TODO: Ensure file exists, error out if not
 			stdin_redirect = fopen(line->redirect_input, "r");
 		}
 		if (line->redirect_output != NULL) {
