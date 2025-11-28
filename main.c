@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/errno.h>
@@ -67,6 +68,8 @@ int main(void) {
 
 	mascara = umask(0);
 	umask(mascara);
+	
+	signal(SIGINT, SIG_IGN);
 
 	printf("msh> ");
 	while (fgets(buf, 1024, stdin)) {
@@ -118,7 +121,7 @@ int main(void) {
 				continue;
 			} else {
 				if(i < line->ncommands-1) {
-					pipe((int*)pipes+i*2);
+					pipe(pipes+i*2);
 				}
 
 				childPid = fork();
@@ -128,7 +131,8 @@ int main(void) {
 				}
 
 				if (childPid == 0) { // CHILD
-					// TODO: Maybe? remove the i check from the redirections
+					signal(SIGINT, SIG_DFL);
+
 					if (i == 0 && line->redirect_input != NULL) {
 						close(STDIN_FILENO);
 						dup(fileno(stdin_redirect));
