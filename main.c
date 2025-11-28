@@ -11,6 +11,8 @@
 
 #define PATH_LEN 1024
 
+mode_t mascara;
+
 // TODO: create job struct
 
 int cd(char* dir) {
@@ -34,7 +36,7 @@ int cd(char* dir) {
 // TODO MEMORIA: Explain string to octal algorithm
 
 int applyUmask(char* mode) {
-	int modeInt = 0;
+	mode_t modeInt = 0;
 	int i;
 	for(i=0; i<strlen(mode); i++){
 		if(mode[i] >= '0' && mode[i] <= '9'){
@@ -45,6 +47,7 @@ int applyUmask(char* mode) {
         	return 1;
 		}
 	}
+	mascara = modeInt;
 	umask(modeInt);
 
 	return 0;
@@ -61,6 +64,9 @@ int main(void) {
 	FILE* stdin_redirect = NULL;
 	FILE* stdout_redirect = NULL;
 	FILE* stderr_redirect = NULL;
+
+	mascara = umask(0);
+	umask(mascara);
 
 	printf("msh> ");
 	while (fgets(buf, 1024, stdin)) {
@@ -96,12 +102,17 @@ int main(void) {
 					} else {
 						cd(line->commands[i].argv[1]);
 					}
-				} else if (strcmp(line->commands[i].argv[0], "umask") == 0) {
+				} else if(strcmp(line->commands[i].argv[0], "umask") == 0) {
 					if (line->commands[i].argc == 2) {
-						applyUmask(line->commands[i].argv[1]);
-					} else {
-						// TODO: Replace this with code to get the value of umask when called with no arguments (argc == 1)
-						printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros\n");
+						if(strlen(line->commands[i].argv[1])==4){
+							applyUmask(line->commands[i].argv[1]+1);
+						}else if(strlen(line->commands[i].argv[1])==3){
+							applyUmask(line->commands[i].argv[1]);
+						}else{
+							printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros\n");
+						}
+					} else if (line->commands[i].argc == 1){
+						printf("%04o\n", mascara);
 					}
 				}
 				continue;
