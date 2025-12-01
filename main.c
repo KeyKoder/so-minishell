@@ -156,6 +156,7 @@ int main(void) {
 					}
 
 					if (currentSelectedJob != NULL) {
+						printf("%s", currentSelectedJob->originalLine);
 						waitpid(currentSelectedJob->pid, NULL, 0);
 						freeJob(currentSelectedJob);
 					}
