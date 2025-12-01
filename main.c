@@ -11,6 +11,8 @@
 #include "parser.h"
 
 #define PATH_LEN 1024
+#define MAX_INITIAL_JOBS 1
+#define JOBS_RESIZE_FACTOR 2
 
 mode_t mascara;
 
@@ -83,8 +85,9 @@ int main(void) {
 	tline * line;
 	int i;
 
-	job_t* jobs; // TODO: Implement support for background jobs and multiple jobs.
-	job_t currentJob;
+	job_t* jobs = malloc(sizeof(job_t*) * MAX_INITIAL_JOBS);
+	job_t* currentJob;
+	int currentJobIndex = 0;
 
 	// Get current active umask value. umask() returns the previous umask value.
 	mascara = umask(0);
@@ -96,131 +99,134 @@ int main(void) {
 	while (fgets(buf, 1024, stdin)) {
 		line = tokenize(buf);
 
-		currentJob = createJob();
+		jobs[currentJobIndex++] = createJob();
+		currentJob = jobs+currentJobIndex;
 		if (line == NULL)
 			continue;
 		if (line->redirect_input != NULL) {
 			// TODO: Ensure file exists, error out if not
-			currentJob.stdin_redirect = fopen(line->redirect_input, "r");
+			currentJob->stdin_redirect = fopen(line->redirect_input, "r");
 		}
 		if (line->redirect_output != NULL) {
-			currentJob.stdout_redirect = fopen(line->redirect_output, "w");
+			currentJob->stdout_redirect = fopen(line->redirect_output, "w");
 		}
 		if (line->redirect_error != NULL) {
-			currentJob.stderr_redirect = fopen(line->redirect_error, "w");
+			currentJob->stderr_redirect = fopen(line->redirect_error, "w");
 		}
 		if (line->background) {
-			// TODO: Handle background execution with jobs
-			printf("comando a ejecutarse en background\n");
 		}
 
-		currentJob.line = line;		
-		currentJob.pipes = (int*)malloc((line->ncommands-1) * sizeof(int)*2);
-
-		currentJob.pid = fork();
-		if(currentJob.pid == 0) { // CHILD
-			signal(SIGINT, SIG_DFL);
-			
-			for (i=0; i<currentJob.line->ncommands; i++) {
-				if (currentJob.line->commands[i].filename == NULL && !currentJob.line->background) {
-					// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
-					if (strcmp(currentJob.line->commands[i].argv[0], "exit") == 0) {
-						exit(0);
-					} else if (strcmp(currentJob.line->commands[i].argv[0], "cd") == 0) {
-						// cd(currentJob.line->commands[i].argc == 1 ? NULL : currentJob.line->commands[i].argv[1]);
-						if (currentJob.line->commands[i].argc == 1) {
-							cd(NULL);
-						} else {
-							cd(currentJob.line->commands[i].argv[1]);
-						}
-					} else if(strcmp(currentJob.line->commands[i].argv[0], "umask") == 0) {
-						if (currentJob.line->commands[i].argc == 2) {
-							if(strlen(currentJob.line->commands[i].argv[1])==4){
-								applyUmask(currentJob.line->commands[i].argv[1]+1);
-							}else if(strlen(currentJob.line->commands[i].argv[1])==3){
-								applyUmask(currentJob.line->commands[i].argv[1]);
-							}else{
-								printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros\n");
-							}
-						} else if (currentJob.line->commands[i].argc == 1){
-							printf("%04o\n", mascara);
-						}
-					}
-					continue;
+		currentJob->line = line;
+		if (currentJob->line->ncommands == 1 && currentJob->line->commands[0].filename == NULL && !currentJob->line->background) {
+			// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
+			if (strcmp(currentJob->line->commands[0].argv[0], "exit") == 0) {
+				exit(0);
+			} else if (strcmp(currentJob->line->commands[0].argv[0], "cd") == 0) {
+				// cd(currentJob->line->commands[0].argc == 1 ? NULL : currentJob->line->commands[0].argv[1]);
+				if (currentJob->line->commands[0].argc == 1) {
+					cd(NULL);
 				} else {
-					if(i < currentJob.line->ncommands-1) {
-						pipe(currentJob.pipes+i*2);
+					cd(currentJob->line->commands[0].argv[1]);
+				}
+			} else if(strcmp(currentJob->line->commands[0].argv[0], "umask") == 0) {
+				if (currentJob->line->commands[0].argc == 2) {
+					if(strlen(currentJob->line->commands[0].argv[1])==4){
+						applyUmask(currentJob->line->commands[0].argv[1]+1);
+					}else if(strlen(currentJob->line->commands[0].argv[1])==3){
+						applyUmask(currentJob->line->commands[0].argv[1]);
+					}else{
+						printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros\n");
+					}
+				} else if (currentJob->line->commands[0].argc == 1){
+					printf("%04o\n", mascara);
+				}
+			}
+			currentJobIndex--;
+			free(currentJob);
+			currentJob = NULL;
+		}else {
+			currentJob->pipes = (int*)malloc((line->ncommands-1) * sizeof(int)*2);
+
+			currentJob->pid = fork();
+
+			if(currentJob->pid == 0) { // CHILD (job container)
+				if(!currentJob->line->background) signal(SIGINT, SIG_DFL);
+				
+				for (i=0; i<currentJob->line->ncommands; i++) {
+					if(i < currentJob->line->ncommands-1) {
+						pipe(currentJob->pipes+i*2);
 					}
 
-					currentJob.childPid = fork();
-					if (currentJob.childPid < 0) {
+					currentJob->childPid = fork();
+					if (currentJob->childPid < 0) {
 						// TODO: Handle fork error somehow
 						break;
 					}
 
-					if (currentJob.childPid == 0) { // JOB CHILD
-						if (i == 0 && currentJob.line->redirect_input != NULL) {
+					if (currentJob->childPid == 0) { // JOB CHILD
+						if (i == 0 && currentJob->line->redirect_input != NULL) {
 							close(STDIN_FILENO);
-							dup(fileno(currentJob.stdin_redirect));
-							fclose(currentJob.stdin_redirect);
+							dup(fileno(currentJob->stdin_redirect));
+							fclose(currentJob->stdin_redirect);
 						}
-						if (i == currentJob.line->ncommands-1 && currentJob.line->redirect_output != NULL) {
+						if (i == currentJob->line->ncommands-1 && currentJob->line->redirect_output != NULL) {
 							close(STDOUT_FILENO);
-							dup(fileno(currentJob.stdout_redirect));
-							fclose(currentJob.stdout_redirect);
+							dup(fileno(currentJob->stdout_redirect));
+							fclose(currentJob->stdout_redirect);
 						}
-						if (i == currentJob.line->ncommands-1 && currentJob.line->redirect_error != NULL) {
+						if (i == currentJob->line->ncommands-1 && currentJob->line->redirect_error != NULL) {
 							close(STDERR_FILENO);
-							dup(fileno(currentJob.stderr_redirect));
-							fclose(currentJob.stderr_redirect);
+							dup(fileno(currentJob->stderr_redirect));
+							fclose(currentJob->stderr_redirect);
 						}
 
 						if(i == 0) {
-							close(currentJob.pipes[0]);
-							dup2(currentJob.pipes[1], STDOUT_FILENO);
-						} else if(i == currentJob.line->ncommands-1) {
-							close(currentJob.pipes[(i-1)*2+1]);
-							dup2(currentJob.pipes[(i-1)*2], STDIN_FILENO);
+							close(currentJob->pipes[0]);
+							dup2(currentJob->pipes[1], STDOUT_FILENO);
+						} else if(i == currentJob->line->ncommands-1) {
+							close(currentJob->pipes[(i-1)*2+1]);
+							dup2(currentJob->pipes[(i-1)*2], STDIN_FILENO);
 						} else {
-							close(currentJob.pipes[(i-1)*2+1]);
-							dup2(currentJob.pipes[(i-1)*2], STDIN_FILENO);
+							close(currentJob->pipes[(i-1)*2+1]);
+							dup2(currentJob->pipes[(i-1)*2], STDIN_FILENO);
 
-							close(currentJob.pipes[i*2]);
-							dup2(currentJob.pipes[i*2+1], STDOUT_FILENO);
+							close(currentJob->pipes[i*2]);
+							dup2(currentJob->pipes[i*2+1], STDOUT_FILENO);
 						}
 
-						execvp(currentJob.line->commands[i].filename, currentJob.line->commands[i].argv);
+						execvp(currentJob->line->commands[i].filename, currentJob->line->commands[i].argv);
 
 						exit(39); // TODO: execvp failed, think of what to return here later
 					} else { // JOB PARENT
 						if(i > 0) {
-							close(currentJob.pipes[(i-1)*2+1]);
-							close(currentJob.pipes[(i-1)*2]);
+							close(currentJob->pipes[(i-1)*2+1]);
+							close(currentJob->pipes[(i-1)*2]);
 						}
-						waitpid(currentJob.childPid, NULL, 0);
+						waitpid(currentJob->childPid, NULL, 0);
 						continue;
 					}
 				}
+				exit(0); // Exit from job container process
+			}else { // NOT CHILD (minishell)
+				if(!line->background) waitpid(currentJob->pid, NULL, WNOHANG);
 			}
-		}else { // NOT CHILD (minishell)
-			waitpid(currentJob.pid, NULL, 0);
 		}
 
 		// Cleanup
 		if(!line->background) {
-			if (currentJob.stdin_redirect != NULL) {
-				fclose(currentJob.stdin_redirect);
-				currentJob.stdin_redirect = NULL;
+			if (currentJob->stdin_redirect != NULL) {
+				fclose(currentJob->stdin_redirect);
+				currentJob->stdin_redirect = NULL;
 			}
-			if (currentJob.stdout_redirect != NULL) {
-				fclose(currentJob.stdout_redirect);
-				currentJob.stdout_redirect = NULL;
+			if (currentJob->stdout_redirect != NULL) {
+				fclose(currentJob->stdout_redirect);
+				currentJob->stdout_redirect = NULL;
 			}
-			if (currentJob.stderr_redirect != NULL) {
-				fclose(currentJob.stderr_redirect);
-				currentJob.stderr_redirect = NULL;
+			if (currentJob->stderr_redirect != NULL) {
+				fclose(currentJob->stderr_redirect);
+				currentJob->stderr_redirect = NULL;
 			}
-			free(currentJob.pipes);
+			free(currentJob->pipes);
 		}
 
 		printf("msh> ");
