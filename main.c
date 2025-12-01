@@ -126,6 +126,8 @@ void freeJob(job_t* job) {
 		free(job->pipes);
 	}
 
+	free(job->originalLine);
+
 	// check job->next to see if its the target of free
 	if(job == jobs) { // edge case: its the first one
 		jobs = job->next;
@@ -194,9 +196,7 @@ int main(void) {
 
 			currentJob->line = line;
 
-			// TODO: Report command not found/not recognized
 			if (line->ncommands == 1 && line->commands[0].filename == NULL && !line->background) {
-				// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
 				if (strcmp(currentJob->line->commands[0].argv[0], "exit") == 0) {
 					exit(0);
 				} else if (strcmp(currentJob->line->commands[0].argv[0], "cd") == 0) {
