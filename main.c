@@ -77,14 +77,6 @@ struct Job {
 job_t* jobs = NULL;
 job_t* currentJob = NULL;
 
-job_t* getLastJob() {
-	job_t* lastJob = jobs;
-	while(lastJob->next != NULL) {
-		lastJob = lastJob->next;
-	}
-	return lastJob;
-}
-
 job_t* createJob() {
 	job_t* job = malloc(sizeof(job_t));
 	
@@ -102,7 +94,11 @@ job_t* createJob() {
 	if(jobs == NULL) {
 		jobs = job;
 	}else {
-		getLastJob()->next = job;
+		job_t* lastJob = jobs;
+		while(lastJob->next != NULL) {
+			lastJob = lastJob->next;
+		}
+		lastJob->next = job;
 	}
 	
 	return job;
