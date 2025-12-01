@@ -181,8 +181,15 @@ int main(void) {
 			strcpy(currentJob->originalLine, buf);
 			
 			if (line->redirect_input != NULL) {
-				// TODO: Ensure file exists, error out if not
-				currentJob->stdin_redirect = fopen(line->redirect_input, "r");
+				if(access(line->redirect_input, F_OK) == 0) {
+					currentJob->stdin_redirect = fopen(line->redirect_input, "r");
+				} else {
+					// Error out, print prompt and skip
+					printf("ERROR: El archivo %s no es accesible\n", line->redirect_input);
+					freeJob(currentJob);
+					printf("msh> ");
+					continue;
+				}
 			}
 			if (line->redirect_output != NULL) {
 				currentJob->stdout_redirect = fopen(line->redirect_output, "w");
