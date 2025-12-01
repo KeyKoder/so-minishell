@@ -56,7 +56,9 @@ int applyUmask(char* mode) {
 	return 0;
 }
 
-typedef struct {
+typedef struct Job job_t;
+
+struct Job {
 	tline* line;
 	
 	pid_t pid;
@@ -66,28 +68,80 @@ typedef struct {
 	FILE* stdin_redirect;
 	FILE* stdout_redirect;
 	FILE* stderr_redirect;
-} job_t;
 
-job_t createJob() {
-	job_t job = {};
+	struct Job* next;
+};
+
+
+job_t* jobs;
+job_t* currentJob;
+
+job_t* createJob() {
+	job_t* job = malloc(sizeof(job_t));
 	
-	job.line = NULL;
-	job.pipes = NULL;
-	job.stdin_redirect = NULL;
-	job.stdout_redirect = NULL;
-	job.stderr_redirect = NULL;
+	job->line = NULL;
+	job->pipes = NULL;
+	job->stdin_redirect = NULL;
+	job->stdout_redirect = NULL;
+	job->stderr_redirect = NULL;
+	
+	job->next = NULL;
+
+	if(jobs == NULL) {
+		jobs = job;
+	}else {
+		job_t* lastJob = jobs;
+		while(lastJob->next != NULL) {
+			lastJob = lastJob->next;
+		}
+
+		lastJob->next = job;
+	}
 	
 	return job;
 }
+
+void freeJob(job_t* job) {
+	if (job->stdin_redirect != NULL) {
+		fclose(job->stdin_redirect);
+		job->stdin_redirect = NULL;
+	}
+	if (job->stdout_redirect != NULL) {
+		fclose(job->stdout_redirect);
+		job->stdout_redirect = NULL;
+	}
+	if (job->stderr_redirect != NULL) {
+		fclose(job->stderr_redirect);
+		job->stderr_redirect = NULL;
+	}
+
+	if(job->pipes != NULL) {
+		free(job->pipes);
+	}
+
+	// check job->next to see if its the target of free
+	if(job == jobs) { // edge case: its the first one
+		jobs = job->next;
+	}else { // its somewhere in the list
+		job_t* prevJob = jobs;
+		while(prevJob->next != job) {
+			prevJob = prevJob->next;
+		}
+		prevJob->next = job->next->next;
+	}
+
+	free(job);
+}
+
+// frees/cleans up bg job
+// outputs "job finished" msg to stdout
+// void handleJobClose(int sig) {} // TODO: Implement this for SIGCHLD
+
 
 int main(void) {
 	char buf[1024];
 	tline * line;
 	int i;
-
-	job_t* jobs = malloc(sizeof(job_t*) * MAX_INITIAL_JOBS);
-	job_t* currentJob;
-	int currentJobIndex = 0;
 
 	// Get current active umask value. umask() returns the previous umask value.
 	mascara = umask(0);
@@ -99,8 +153,7 @@ int main(void) {
 	while (fgets(buf, 1024, stdin)) {
 		line = tokenize(buf);
 
-		jobs[currentJobIndex++] = createJob();
-		currentJob = jobs+currentJobIndex;
+		currentJob = createJob();
 		if (line == NULL)
 			continue;
 		if (line->redirect_input != NULL) {
@@ -117,6 +170,7 @@ int main(void) {
 		}
 
 		currentJob->line = line;
+		// TODO: Report command not found/not recognized
 		if (currentJob->line->ncommands == 1 && currentJob->line->commands[0].filename == NULL && !currentJob->line->background) {
 			// TODO: Handle cd, exit, jobs, fg and other commands that don't have an executable
 			if (strcmp(currentJob->line->commands[0].argv[0], "exit") == 0) {
@@ -141,9 +195,6 @@ int main(void) {
 					printf("%04o\n", mascara);
 				}
 			}
-			currentJobIndex--;
-			free(currentJob);
-			currentJob = NULL;
 		}else {
 			currentJob->pipes = (int*)malloc((line->ncommands-1) * sizeof(int)*2);
 
@@ -159,11 +210,10 @@ int main(void) {
 
 					currentJob->childPid = fork();
 					if (currentJob->childPid < 0) {
-						// TODO: Handle fork error somehow
 						break;
 					}
 
-					if (currentJob->childPid == 0) { // JOB CHILD
+					if (currentJob->childPid == 0) { // JOB CHILD (single command execution)
 						if (i == 0 && currentJob->line->redirect_input != NULL) {
 							close(STDIN_FILENO);
 							dup(fileno(currentJob->stdin_redirect));
@@ -196,8 +246,8 @@ int main(void) {
 
 						execvp(currentJob->line->commands[i].filename, currentJob->line->commands[i].argv);
 
-						exit(39); // TODO: execvp failed, think of what to return here later
-					} else { // JOB PARENT
+						exit(39);
+					} else { // JOB PARENT (job container)
 						if(i > 0) {
 							close(currentJob->pipes[(i-1)*2+1]);
 							close(currentJob->pipes[(i-1)*2]);
@@ -208,25 +258,13 @@ int main(void) {
 				}
 				exit(0); // Exit from job container process
 			}else { // NOT CHILD (minishell)
-				if(!line->background) waitpid(currentJob->pid, NULL, WNOHANG);
+				if(!line->background) waitpid(currentJob->pid, NULL, 0);
 			}
 		}
 
 		// Cleanup
 		if(!line->background) {
-			if (currentJob->stdin_redirect != NULL) {
-				fclose(currentJob->stdin_redirect);
-				currentJob->stdin_redirect = NULL;
-			}
-			if (currentJob->stdout_redirect != NULL) {
-				fclose(currentJob->stdout_redirect);
-				currentJob->stdout_redirect = NULL;
-			}
-			if (currentJob->stderr_redirect != NULL) {
-				fclose(currentJob->stderr_redirect);
-				currentJob->stderr_redirect = NULL;
-			}
-			free(currentJob->pipes);
+			freeJob(currentJob);
 		}
 
 		printf("msh> ");
