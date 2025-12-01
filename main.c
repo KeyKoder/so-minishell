@@ -11,48 +11,6 @@
 #include "parser.h"
 
 #define PATH_LEN 1024
-#define MAX_INITIAL_JOBS 1
-#define JOBS_RESIZE_FACTOR 2
-
-mode_t mascara;
-
-int cd(char* dir) {
-    if(dir == NULL) {
-        dir = getenv("HOME");
-    }
-
-    if(chdir(dir) != 0) {
-        fprintf(stderr, "Error al cambiar. %s\n", strerror(errno));
-        return errno;
-    }
-
-    char cwd[PATH_LEN];
-    getcwd(cwd, PATH_LEN);
-    printf("%s\n", cwd);
-
-    return 0;
-}
-
-
-// TODO MEMORIA: Explain string to octal algorithm
-
-int applyUmask(char* mode) {
-	mode_t modeInt = 0;
-	int i;
-	for(i=0; i<strlen(mode); i++){
-		if(mode[i] >= '0' && mode[i] <= '9'){
-			modeInt = modeInt | mode[i] -'0' << ((2-i)*3);
-		}
-		else{
-			printf("Numero fuera del rango 0-9.");
-        	return 1;
-		}
-	}
-	mascara = modeInt;
-	umask(modeInt);
-
-	return 0;
-}
 
 typedef struct Job job_t;
 
@@ -74,69 +32,18 @@ struct Job {
 };
 
 
+int cd(char* dir);
+
+int applyUmask(char* mode);
+
+job_t* createJob();
+
+void freeJob(job_t* job);
+
+mode_t mask;
+
 job_t* jobs = NULL;
 job_t* currentJob = NULL;
-
-job_t* createJob() {
-	job_t* job = malloc(sizeof(job_t));
-	
-	job->line = NULL;
-	job->pipes = NULL;
-	job->stdin_redirect = NULL;
-	job->stdout_redirect = NULL;
-	job->stderr_redirect = NULL;
-	
-	job->next = NULL;
-	job->originalLine = NULL;
-	
-	job->background = 0;
-
-	if(jobs == NULL) {
-		jobs = job;
-	}else {
-		job_t* lastJob = jobs;
-		while(lastJob->next != NULL) {
-			lastJob = lastJob->next;
-		}
-		lastJob->next = job;
-	}
-	
-	return job;
-}
-
-void freeJob(job_t* job) {
-	if (job->stdin_redirect != NULL) {
-		fclose(job->stdin_redirect);
-		job->stdin_redirect = NULL;
-	}
-	if (job->stdout_redirect != NULL) {
-		fclose(job->stdout_redirect);
-		job->stdout_redirect = NULL;
-	}
-	if (job->stderr_redirect != NULL) {
-		fclose(job->stderr_redirect);
-		job->stderr_redirect = NULL;
-	}
-
-	if(job->pipes != NULL) {
-		free(job->pipes);
-	}
-
-	free(job->originalLine);
-
-	// check job->next to see if its the target of free
-	if(job == jobs) { // edge case: its the first one
-		jobs = job->next;
-	}else { // its somewhere in the list
-		job_t* prevJob = jobs;
-		while(prevJob->next != job) {
-			prevJob = prevJob->next;
-		}
-		prevJob->next = job->next;
-	}
-
-	free(job);
-}
 
 int main(void) {
 	char buf[1024];
@@ -152,8 +59,8 @@ int main(void) {
 	int bgCheckStatus;
 
 	// Get current active umask value. umask() returns the previous umask value.
-	mascara = umask(0);
-	umask(mascara);
+	mask = umask(0);
+	umask(mask);
 	
 	signal(SIGINT, SIG_IGN);
 
@@ -163,12 +70,6 @@ int main(void) {
 
 		if (line == NULL)
 			continue;
-
-
-		// if(line->ncommands == 0) {
-		// 	printf("msh> ");
-		// 	continue;
-		// }
 
 		if(line->ncommands != 0) {
 			currentJob = createJob();
@@ -219,7 +120,7 @@ int main(void) {
 							printf("USO:\numask [mode]\nmode - Valor octal de la máscara a aplicar a los permisos para los nuevos ficheros\n");
 						}
 					} else if (currentJob->line->commands[0].argc == 1){
-						printf("%04o\n", mascara);
+						printf("%04o\n", mask);
 					}
 				} else if(strcmp(currentJob->line->commands[0].argv[0], "jobs") == 0) {
 					currentSelectedJob = jobs;
@@ -355,4 +256,103 @@ int main(void) {
 	}
 
 	return 0;
+}
+
+
+int cd(char* dir) {
+    if(dir == NULL) {
+        dir = getenv("HOME");
+    }
+
+    if(chdir(dir) != 0) {
+        fprintf(stderr, "Error al cambiar. %s\n", strerror(errno));
+        return errno;
+    }
+
+    char cwd[PATH_LEN];
+    getcwd(cwd, PATH_LEN);
+    printf("%s\n", cwd);
+
+    return 0;
+}
+
+// TODO MEMORIA: Explain string to octal algorithm
+
+int applyUmask(char* mode) {
+	mode_t modeInt = 0;
+	int i;
+	for(i=0; i<strlen(mode); i++){
+		if(mode[i] >= '0' && mode[i] <= '9'){
+			modeInt = modeInt | mode[i] -'0' << ((2-i)*3);
+		}
+		else{
+			printf("Numero fuera del rango 0-9.");
+        	return 1;
+		}
+	}
+	mask = modeInt;
+	umask(modeInt);
+
+	return 0;
+}
+
+job_t* createJob() {
+	job_t* job = malloc(sizeof(job_t));
+	
+	job->line = NULL;
+	job->pipes = NULL;
+	job->stdin_redirect = NULL;
+	job->stdout_redirect = NULL;
+	job->stderr_redirect = NULL;
+	
+	job->next = NULL;
+	job->originalLine = NULL;
+	
+	job->background = 0;
+
+	if(jobs == NULL) {
+		jobs = job;
+	}else {
+		job_t* lastJob = jobs;
+		while(lastJob->next != NULL) {
+			lastJob = lastJob->next;
+		}
+		lastJob->next = job;
+	}
+	
+	return job;
+}
+
+void freeJob(job_t* job) {
+	if (job->stdin_redirect != NULL) {
+		fclose(job->stdin_redirect);
+		job->stdin_redirect = NULL;
+	}
+	if (job->stdout_redirect != NULL) {
+		fclose(job->stdout_redirect);
+		job->stdout_redirect = NULL;
+	}
+	if (job->stderr_redirect != NULL) {
+		fclose(job->stderr_redirect);
+		job->stderr_redirect = NULL;
+	}
+
+	if(job->pipes != NULL) {
+		free(job->pipes);
+	}
+
+	free(job->originalLine);
+
+	// check job->next to see if its the target of free
+	if(job == jobs) { // edge case: its the first one
+		jobs = job->next;
+	}else { // its somewhere in the list
+		job_t* prevJob = jobs;
+		while(prevJob->next != job) {
+			prevJob = prevJob->next;
+		}
+		prevJob->next = job->next;
+	}
+
+	free(job);
 }
