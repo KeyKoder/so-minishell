@@ -77,6 +77,14 @@ struct Job {
 job_t* jobs = NULL;
 job_t* currentJob = NULL;
 
+job_t* getLastJob() {
+	job_t* lastJob = jobs;
+	while(lastJob->next != NULL) {
+		lastJob = lastJob->next;
+	}
+	return lastJob;
+}
+
 job_t* createJob() {
 	job_t* job = malloc(sizeof(job_t));
 	
@@ -94,12 +102,7 @@ job_t* createJob() {
 	if(jobs == NULL) {
 		jobs = job;
 	}else {
-		job_t* lastJob = jobs;
-		while(lastJob->next != NULL) {
-			lastJob = lastJob->next;
-		}
-
-		lastJob->next = job;
+		getLastJob()->next = job;
 	}
 	
 	return job;
@@ -141,8 +144,9 @@ int main(void) {
 	char buf[1024];
 	tline * line;
 	int i;
+	pid_t currentJobPid;
 
-	job_t* currentJobForJobsCommand;
+	job_t* currentSelectedJob;
 
 	// Used for checking the state of background jobs
 	job_t* bgCheckJob;
@@ -215,23 +219,50 @@ int main(void) {
 						printf("%04o\n", mascara);
 					}
 				} else if(strcmp(currentJob->line->commands[0].argv[0], "jobs") == 0) {
-					currentJobForJobsCommand = jobs;
-					i = 1;
-					while(currentJobForJobsCommand != NULL) {
-						if(currentJobForJobsCommand->background) {
-							printf("[%d] Running\t\t%s", i, currentJobForJobsCommand->originalLine);
+					currentSelectedJob = jobs;
+					while(currentSelectedJob != NULL) {
+						if(currentSelectedJob->background) {
+							printf("[%d] Running\t\t%s", currentSelectedJob->pid, currentSelectedJob->originalLine);
 						}
 
-						i++;
-						currentJobForJobsCommand = currentJobForJobsCommand->next;
+						currentSelectedJob = currentSelectedJob->next;
+					}
+				} else if(strcmp(currentJob->line->commands[0].argv[0], "fg") == 0) {
+					currentSelectedJob = NULL;
+					if (currentJob->line->commands[0].argc == 2) {
+						currentSelectedJob = jobs;
+						while(currentSelectedJob != NULL) {
+							if(currentSelectedJob->background && currentSelectedJob->pid == atoi(currentJob->line->commands[0].argv[1])) {
+								break;
+							}
+
+							currentSelectedJob = currentSelectedJob->next;
+						}
+					} else if (currentJob->line->commands[0].argc == 1){
+						// Get last job (that is not me)
+						currentSelectedJob = jobs;
+						while(currentSelectedJob != NULL) {
+							if(currentSelectedJob->background && currentSelectedJob->next == currentJob) {
+								break;
+							}
+
+							currentSelectedJob = currentSelectedJob->next;
+						}
+					} else {
+						printf("USO:\nfg [pid]\npid - PID del job a retomar\n");
+					}
+
+					if(currentSelectedJob != NULL) {
+						waitpid(currentSelectedJob->pid, NULL, 0);
+						freeJob(currentSelectedJob);
 					}
 				}
 			}else {
 				currentJob->pipes = (int*)malloc((line->ncommands-1) * sizeof(int)*2);
 
-				currentJob->pid = fork();
+				currentJobPid = fork();
 
-				if(currentJob->pid == 0) { // CHILD (job container)
+				if(currentJobPid == 0) { // CHILD (job container)
 					if(!currentJob->background) signal(SIGINT, SIG_DFL);
 					
 					for (i=0; i<currentJob->line->ncommands; i++) {
@@ -289,32 +320,31 @@ int main(void) {
 					}
 					exit(0); // Exit from job container process
 				}else { // NOT CHILD (minishell)
+					currentJob->pid = currentJobPid;
 					if(!line->background) waitpid(currentJob->pid, NULL, 0);
 				}
 			}
 
-			// Cleanup
-			if(!line->background) {
+			// Cleanup if not background and not custom shell command (fg, jobs...)
+			if(!line->background && currentJob->pid != 0) {
 				freeJob(currentJob);
 			}
 		}
 
 		// Check if bg jobs finished
 		bgCheckJob = jobs;
-		i = 1;
 		while(bgCheckJob != NULL) {
 			bgCheckJobNext = bgCheckJob->next;
 			
 			if(bgCheckJob->background) {
 				if(waitpid(bgCheckJob->pid, &bgCheckStatus, WNOHANG) > 0) {
 					if(WIFEXITED(bgCheckStatus)) {
-						printf("[%d] Done\t\t%s", i, bgCheckJob->originalLine);
+						printf("[%d] Done\t\t%s", bgCheckJob->pid, bgCheckJob->originalLine);
 						freeJob(bgCheckJob);
 					}
 				}
 			}
 
-			i++;
 			bgCheckJob = bgCheckJobNext;
 		}
 
