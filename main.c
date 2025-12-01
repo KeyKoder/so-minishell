@@ -66,8 +66,9 @@ struct Job {
 	FILE* stdin_redirect;
 	FILE* stdout_redirect;
 	FILE* stderr_redirect;
-
+	
 	int background;
+	char* originalLine;
 
 	struct Job* next;
 };
@@ -86,6 +87,7 @@ job_t* createJob() {
 	job->stderr_redirect = NULL;
 	
 	job->next = NULL;
+	job->originalLine = NULL;
 	
 	job->background = 0;
 
@@ -140,6 +142,8 @@ int main(void) {
 	tline * line;
 	int i;
 
+	job_t* currentJobForJobsCommand;
+
 	// Used for checking the state of background jobs
 	job_t* bgCheckJob;
 	job_t* bgCheckJobNext;
@@ -166,6 +170,10 @@ int main(void) {
 
 		if(line->ncommands != 0) {
 			currentJob = createJob();
+			
+			currentJob->originalLine = (char*)malloc(sizeof(char) * strlen(buf));
+			strcpy(currentJob->originalLine, buf);
+			
 			if (line->redirect_input != NULL) {
 				// TODO: Ensure file exists, error out if not
 				currentJob->stdin_redirect = fopen(line->redirect_input, "r");
@@ -205,6 +213,17 @@ int main(void) {
 						}
 					} else if (currentJob->line->commands[0].argc == 1){
 						printf("%04o\n", mascara);
+					}
+				} else if(strcmp(currentJob->line->commands[0].argv[0], "jobs") == 0) {
+					currentJobForJobsCommand = jobs;
+					i = 1;
+					while(currentJobForJobsCommand != NULL) {
+						if(currentJobForJobsCommand->background) {
+							printf("[%d] Running\t\t%s", i, currentJobForJobsCommand->originalLine);
+						}
+
+						i++;
+						currentJobForJobsCommand = currentJobForJobsCommand->next;
 					}
 				}
 			}else {
@@ -282,18 +301,20 @@ int main(void) {
 
 		// Check if bg jobs finished
 		bgCheckJob = jobs;
+		i = 1;
 		while(bgCheckJob != NULL) {
 			bgCheckJobNext = bgCheckJob->next;
 			
 			if(bgCheckJob->background) {
 				if(waitpid(bgCheckJob->pid, &bgCheckStatus, WNOHANG) > 0) {
 					if(WIFEXITED(bgCheckStatus)) {
-						printf("[%d] Done.\n", bgCheckJob->pid);
+						printf("[%d] Done\t\t%s", i, bgCheckJob->originalLine);
 						freeJob(bgCheckJob);
 					}
 				}
 			}
 
+			i++;
 			bgCheckJob = bgCheckJobNext;
 		}
 
