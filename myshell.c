@@ -68,8 +68,10 @@ int main(void) {
 	while (fgets(buf, 1024, stdin)) {
 		line = tokenize(buf);
 
-		if (line == NULL)
+		if (line == NULL) {
+			printf("msh> ");
 			continue;
+		}
 
 		if (line->ncommands != 0) {
 			currentJob = createJob();
