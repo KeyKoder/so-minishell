@@ -281,10 +281,10 @@ int cd(char* dir) {
 
 int applyUmask(char* mode) {
 	mode_t modeInt = 0;
-	int i;
+	size_t i;
 	for (i = 0; i < strlen(mode); i++) {
 		if (mode[i] >= '0' && mode[i] <= '7') {
-			modeInt = modeInt | mode[i] - '0' << ((2 - i) * 3);
+			modeInt = modeInt | (mode[i] - '0') << ((2 - i) * 3);
 		} else {
 			printf("Numero fuera del rango 0-7.\n");
 			return 1;
