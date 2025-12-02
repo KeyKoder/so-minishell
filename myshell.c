@@ -298,7 +298,7 @@ int applyUmask(char* mode) {
 
 job_t* createJob() {
 	job_t* job = malloc(sizeof(job_t));
-	job_t* lastJob = jobs;
+	job_t* lastJob;
 
 	job->line = NULL;
 	job->pipes = NULL;
