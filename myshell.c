@@ -51,7 +51,6 @@ int main(void) {
 	pid_t currentJobPid;
 
 	job_t* currentSelectedJob;
-	job_t* currentSelectedJobNext;
 
 	// Used for checking the state of background jobs
 	job_t* bgCheckJob;
@@ -105,14 +104,14 @@ int main(void) {
 			if (line->ncommands == 1 && line->commands[0].filename == NULL && !line->background) {
 				if (strcmp(currentJob->line->commands[0].argv[0], "exit") == 0) {
 					// Free background jobs
-					currentSelectedJob = jobs;
-					while (currentSelectedJob != NULL) {
-						currentSelectedJobNext = currentSelectedJob->next;
-						if (currentSelectedJob->background) {
-							freeJob(currentSelectedJob);
+					bgCheckJob = jobs;
+					while (bgCheckJob != NULL) {
+						bgCheckJobNext = bgCheckJob->next;
+						if (bgCheckJob->background) {
+							freeJob(bgCheckJob);
 						}
 
-						currentSelectedJob = currentSelectedJobNext;
+						bgCheckJob = bgCheckJobNext;
 					}
 
 					freeJob(currentJob);
