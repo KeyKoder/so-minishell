@@ -51,6 +51,7 @@ int main(void) {
 	pid_t currentJobPid;
 
 	job_t* currentSelectedJob;
+	job_t* currentSelectedJobNext;
 
 	// Used for checking the state of background jobs
 	job_t* bgCheckJob;
@@ -101,6 +102,18 @@ int main(void) {
 
 			if (line->ncommands == 1 && line->commands[0].filename == NULL && !line->background) {
 				if (strcmp(currentJob->line->commands[0].argv[0], "exit") == 0) {
+					// Free background jobs
+					currentSelectedJob = jobs;
+					while (currentSelectedJob != NULL) {
+						currentSelectedJobNext = currentSelectedJob->next;
+						if (currentSelectedJob->background) {
+							freeJob(currentSelectedJob);
+						}
+
+						currentSelectedJob = currentSelectedJobNext;
+					}
+
+					freeJob(currentJob);
 					exit(0);
 				} else if (strcmp(currentJob->line->commands[0].argv[0], "cd") == 0) {
 					// cd(currentJob->line->commands[0].argc == 1 ? NULL : currentJob->line->commands[0].argv[1]);
@@ -168,7 +181,7 @@ int main(void) {
 
 				currentJobPid = fork();
 
-				if (currentJobPid == 0) {  // CHILD (job container)
+				if (currentJobPid == 0) {  // CHILD (job container/proxy)
 					if (!currentJob->background) signal(SIGINT, SIG_DFL);
 
 					for (i = 0; i < currentJob->line->ncommands; i++) {
@@ -222,7 +235,7 @@ int main(void) {
 							execvp(currentJob->line->commands[i].filename, currentJob->line->commands[i].argv);
 
 							exit(39);
-						} else {  // JOB PARENT (job container)
+						} else {  // JOB PARENT (job container/proxy)
 							if (i > 0) {
 								close(currentJob->pipes[(i - 1) * 2 + 1]);
 								close(currentJob->pipes[(i - 1) * 2]);
