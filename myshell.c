@@ -160,6 +160,8 @@ int main(void) {
 						waitpid(currentSelectedJob->pid, NULL, 0);
 						freeJob(currentSelectedJob);
 					}
+				} else {
+					printf("%s: No se encuentra el mandato\n", currentJob->line->commands[0].argv[0]);
 				}
 			} else {
 				currentJob->pipes = (int*)malloc((line->ncommands - 1) * sizeof(int) * 2);
@@ -170,6 +172,11 @@ int main(void) {
 					if (!currentJob->background) signal(SIGINT, SIG_DFL);
 
 					for (i = 0; i < currentJob->line->ncommands; i++) {
+						if(currentJob->line->commands[i].filename == NULL) {
+							printf("%s: No se encuentra el mandato\n", currentJob->line->commands[i].argv[0]);
+							break;
+						}
+
 						if (i < currentJob->line->ncommands - 1) {
 							pipe(currentJob->pipes + i * 2);
 						}
