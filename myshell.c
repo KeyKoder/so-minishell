@@ -196,18 +196,20 @@ int main(void) {
 								fclose(currentJob->stderrRedirect);
 							}
 
-							if (i == 0) {
-								close(currentJob->pipes[0]);
-								dup2(currentJob->pipes[1], STDOUT_FILENO);
-							} else if (i == currentJob->line->ncommands - 1) {
-								close(currentJob->pipes[(i - 1) * 2 + 1]);
-								dup2(currentJob->pipes[(i - 1) * 2], STDIN_FILENO);
-							} else {
-								close(currentJob->pipes[(i - 1) * 2 + 1]);
-								dup2(currentJob->pipes[(i - 1) * 2], STDIN_FILENO);
+							if(currentJob->line->ncommands > 1) {
+								if (i == 0) {
+									close(currentJob->pipes[0]);
+									dup2(currentJob->pipes[1], STDOUT_FILENO);
+								} else if (i == currentJob->line->ncommands - 1) {
+									close(currentJob->pipes[(i - 1) * 2 + 1]);
+									dup2(currentJob->pipes[(i - 1) * 2], STDIN_FILENO);
+								} else {
+									close(currentJob->pipes[(i - 1) * 2 + 1]);
+									dup2(currentJob->pipes[(i - 1) * 2], STDIN_FILENO);
 
-								close(currentJob->pipes[i * 2]);
-								dup2(currentJob->pipes[i * 2 + 1], STDOUT_FILENO);
+									close(currentJob->pipes[i * 2]);
+									dup2(currentJob->pipes[i * 2 + 1], STDOUT_FILENO);
+								}
 							}
 
 							execvp(currentJob->line->commands[i].filename, currentJob->line->commands[i].argv);
