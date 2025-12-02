@@ -259,6 +259,7 @@ int main(void) {
 }
 
 int cd(char* dir) {
+	char cwd[PATH_LEN];
 	if (dir == NULL) {
 		dir = getenv("HOME");
 	}
@@ -268,7 +269,6 @@ int cd(char* dir) {
 		return errno;
 	}
 
-	char cwd[PATH_LEN];
 	getcwd(cwd, PATH_LEN);
 	printf("%s\n", cwd);
 
@@ -296,6 +296,7 @@ int applyUmask(char* mode) {
 
 job_t* createJob() {
 	job_t* job = malloc(sizeof(job_t));
+	job_t* lastJob = jobs;
 
 	job->line = NULL;
 	job->pipes = NULL;
@@ -311,7 +312,7 @@ job_t* createJob() {
 	if (jobs == NULL) {
 		jobs = job;
 	} else {
-		job_t* lastJob = jobs;
+		lastJob = jobs;
 		while (lastJob->next != NULL) {
 			lastJob = lastJob->next;
 		}
@@ -322,6 +323,8 @@ job_t* createJob() {
 }
 
 void freeJob(job_t* job) {
+	job_t* prevJob;
+	
 	if (job->stdinRedirect != NULL) {
 		fclose(job->stdinRedirect);
 		job->stdinRedirect = NULL;
@@ -345,7 +348,7 @@ void freeJob(job_t* job) {
 	if (job == jobs) {  // edge case: its the first one
 		jobs = job->next;
 	} else {  // its somewhere in the list
-		job_t* prevJob = jobs;
+		prevJob = jobs;
 		while (prevJob->next != job) {
 			prevJob = prevJob->next;
 		}
