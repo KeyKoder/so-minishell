@@ -298,8 +298,6 @@ int cd(char* dir) {
 	return 0;
 }
 
-// TODO MEMORIA: Explain string to octal algorithm
-
 int applyUmask(char* mode) {
 	mode_t modeInt = 0;
 	size_t i;
