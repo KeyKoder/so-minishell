@@ -81,7 +81,7 @@ int main(void) {
 					currentJob->stdinRedirect = fopen(line->redirect_input, "r");
 				} else {
 					// Error out, print prompt and skip
-					printf("ERROR: El archivo %s no es accesible\n", line->redirect_input);
+					printf("%s: Error. %s\n", line->redirect_input, strerror(errno));
 					freeJob(currentJob);
 					printf("msh> ");
 					continue;
